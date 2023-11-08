@@ -1,0 +1,79 @@
+---
+title: "NBA"
+author: "Joe Yi"
+date: "2023-10-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(dplyr)
+library(reshape2)
+library(readxl)
+library(stringr)
+library(writexl)
+```
+
+## Data Import
+
+See Hashtag Basketball for raw data. Copy and paste into an excel file
+
+```{r echo=TRUE}
+season2023 <- read_excel("/Users/joeyi/Documents/NBA/Hashtag Rankings.xlsx")
+
+head(season2023)
+colnames(season2023)
+
+season2023$X3PM <- as.numeric(season2023$X3PM)
+
+
+season2023$FGM <- as.numeric(str_extract_all(season2023$FG, "(?<=\\()-?\\d*\\.?\\d+(?=\\/)"))
+season2023$FGA <- as.numeric(str_extract_all(season2023$FG, "(?<=\\/)-?\\d*\\.?\\d+(?=\\))"))
+season2023$FTM <- as.numeric(str_extract_all(season2023$FT, "(?<=\\()-?\\d*\\.?\\d+(?=\\/)"))
+season2023$FTA <- as.numeric(str_extract_all(season2023$FT, "(?<=\\/)-?\\d*\\.?\\d+(?=\\))"))
+season2023$FGp <- season2023$FGM / season2023$FGA
+season2023$FTp <- season2023$FTM / season2023$FTA
+
+nbascale <- function(x) {
+  scaled <- (x - mean(x)) / sd(x)
+}
+season2023$zFGp <- nbascale(season2023$FGp)
+season2023$zFTp <- nbascale(season2023$FTp)
+season2023$z3PM <- nbascale(season2023$X3PM)
+season2023$zPTS <- nbascale(season2023$PTS)
+season2023$zREB <- nbascale(season2023$TREB)
+season2023$zAST <- nbascale(season2023$AST)
+season2023$zSTL <- nbascale(season2023$STL)
+season2023$zBLK <- nbascale(season2023$BLK)
+season2023$zTO <- nbascale(season2023$TO)
+season2023$zFGA <- nbascale(season2023$FGA)
+season2023$zFTA <- nbascale(season2023$FTA)
+```
+
+Calculating the Best z-scores for Percentage Categories:
+
+High FT% + High FTA = Best -> zFTA + zFT%
+High FT% + Low FTA = Good -> zFTA/4 + zFT%
+Low FT% + Low FTA = Okay -> -zFTA/2 + zFT%
+Low FT% + High FTA = Worst -> -zFTA + zFT%
+
+```{r percentages, echo=FALSE}
+
+dat <- data.frame()
+dat <- season2023 %>% 
+  mutate(zFT = ifelse(zFTp >=0, ifelse(zFTA >=0, zFTp + zFTA, zFTA/4 + zFTp), ifelse(zFTA>= 0, -zFTA + zFTp, -zFTA/2 + zFTp)))
+
+write_xlsx(dat, "/Users/joeyi/Documents/NBA/season_2023.xlsx")
+```
+
+Data Visualization of Percentage Calculator
+
+```{r}
+
+dat %>% 
+  ggplot(aes(y=zFT)) +
+    geom_line(aes(x=zFTp, color='blue')) +
+    geom_line(aes(x=zFTA, color='green'))
+```
+
